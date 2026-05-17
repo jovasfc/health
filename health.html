@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
+    <title>健康日志 - 滑动记录 + 智能筛选</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Helvetica, sans-serif;
+            background: #f1f5f9;
+            margin: 0;
+            padding: 12px;
+            color: #0f172a;
+        }
+        .container {
+            max-width: 560px;
+            margin: 0 auto;
+        }
+        /* 头部 */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: white;
+            padding: 10px 18px;
+            border-radius: 40px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        .settings-icon {
+            background: #eef2ff;
+            border: none;
+            font-size: 1.5rem;
+            padding: 6px 12px;
+            border-radius: 40px;
+            cursor: pointer;
+        }
+        /* 卡片通用 */
+        .card {
+            background: white;
+            border-radius: 28px;
+            padding: 18px 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            border-left: 4px solid #3b82f6;
+            padding-left: 12px;
+            margin-bottom: 14px;
+        }
+        /* 指标标签 */
+        .type-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+        .type-btn {
+            flex: 1;
+            background: #eef2ff;
+            border: none;
+            padding: 8px 0;
+            border-radius: 60px;
+            font-weight: 500;
+            color: #1e40af;
+            cursor: pointer;
+            text-align: center;
+            font-size: 0.85rem;
+        }
+        .type-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+        /* 滑动条区域 */
+        .slider-group {
+            background: #f8fafc;
+            border-radius: 24px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+        .slider-item {
+            margin-bottom: 20px;
+        }
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #cbd5e1;
+            border-radius: 10px;
+            outline: none;
+        }
+        input[type="range"]:focus {
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            border: none;
+        }
+        .value-number {
+            background: white;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-weight: 600;
+            color: #1e3a8a;
+        }
+        .preview-card {
+            background: #eef2ff;
+            border-radius: 40px;
+            padding: 8px 12px;
+            text-align: center;
+            margin-top: 12px;
+            font-weight: 600;
+        }
+        /* 表单 */
+        .form-row { margin-top: 14px; }
+        .form-label {
+            font-weight: 500;
+            font-size: 0.85rem;
+            margin-bottom: 6px;
+        }
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .radio-group label {
+            background: #f1f5f9;
+            padding: 5px 12px;
+            border-radius: 40px;
+            font-size: 0.8rem;
+        }
+        textarea, input[type="text"], input[type="date"] {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 28px;
+            border: 1px solid #cbd5e1;
+            font-size: 0.85rem;
+            background: white;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 60px;
+            font-weight: 600;
+            flex: 1;
+            cursor: pointer;
+        }
+        .btn-secondary {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            padding: 12px;
+            border-radius: 60px;
+            flex: 1;
+            cursor: pointer;
+        }
+        /* 筛选栏 */
+        .filter-bar {
+            background: #f8fafc;
+            border-radius: 24px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .filter-select, .filter-input {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 40px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            font-size: 0.8rem;
+        }
+        .filter-btn {
+            background: #eef2ff;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 40px;
+            cursor: pointer;
+        }
+        /* 表格 */
+        .history-table-wrapper {
+            overflow-x: auto;
+        }
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
+        }
+        .history-table th, .history-table td {
+            padding: 8px 5px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #ef4444;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        .footer-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        .file-label {
+            background: #eef2ff;
+            padding: 6px 14px;
+            border-radius: 40px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-block;
+        }
+        .webdav-card {
+            display: none;
+            margin-bottom: 20px;
+        }
+        .webdav-card.visible {
+            display: block;
+        }
+        .webdav-settings {
+            background: #fefce8;
+            border-left: 4px solid #eab308;
+        }
+        .flex-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        small.hint {
+            font-size: 0.7rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📋 健康日志</h1>
+        <button id="toggleSettingsBtn" class="settings-icon">⚙️</button>
+    </div>
+
+    <!-- 记录主卡片 -->
+    <div class="card">
+        <div class="card-title">📝 指标记录</div>
+        <div class="type-tabs" id="typeTabs">
+            <button data-type="glucose" class="type-btn active">🩸 血糖</button>
+            <button data-type="uric" class="type-btn">💧 尿酸</button>
+            <button data-type="bp" class="type-btn">❤️ 血压</button>
+            <button data-type="lipid" class="type-btn">🫀 血脂</button>
+        </div>
+
+        <!-- 滑动条动态面板 -->
+        <div id="sliderPanel" class="slider-group"></div>
+
+        <!-- 血糖时段/设备区域 (仅血糖可见) -->
+        <div id="periodDeviceArea" style="display: none;">
+            <div class="form-row">
+                <div class="form-label">⏰ 记录时段</div>
+                <div class="radio-group" id="periodGroup">
+                    <label><input type="radio" name="period" value="空腹" checked> 空腹</label>
+                    <label><input type="radio" name="period" value="早餐后"> 早餐后</label>
+                    <label><input type="radio" name="period" value="午餐后"> 午餐后</label>
+                    <label><input type="radio" name="period" value="晚餐后"> 晚餐后</label>
+                    <label><input type="radio" name="period" value="睡前"> 睡前</label>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-label">📟 测量设备</div>
+                <div class="radio-group" id="deviceGroup">
+                    <label><input type="radio" name="device" value="医院测量" checked> 医院</label>
+                    <label><input type="radio" name="device" value="三诺"> 三诺</label>
+                    <label><input type="radio" name="device" value="欧姆龙"> 欧姆龙</label>
+                    <label><input type="radio" name="device" value="其他"> 其他</label>
+                </div>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-label">📝 备注</div>
+            <textarea id="recordNote" rows="2" placeholder="可选备注..."></textarea>
+        </div>
+        <div class="action-buttons">
+            <button id="recordBtn" class="btn-primary">✅ 记录数据</button>
+            <button id="resetDefaultBtn" class="btn-secondary">⟳ 重置默认</button>
+        </div>
+    </div>
+
+    <!-- WebDAV 设置卡片 (默认隐藏) -->
+    <div id="webdavCard" class="webdav-card">
+        <div class="card webdav-settings">
+            <div class="card-title">☁️ WebDAV 同步</div>
+            <div class="form-row">
+                <input type="url" id="webdavUrl" placeholder="https://dav.example.com/health.json">
+            </div>
+            <div class="form-row">
+                <input type="text" id="webdavUser" placeholder="用户名">
+            </div>
+            <div class="form-row">
+                <input type="password" id="webdavPass" placeholder="密码">
+            </div>
+            <div class="flex-row">
+                <button id="saveWebdavBtn" class="file-label">💾 保存</button>
+                <button id="testWebdavBtn" class="file-label">🔌 测试</button>
+                <button id="backupToWebdavBtn" class="file-label">📤 备份</button>
+                <button id="restoreFromWebdavBtn" class="file-label">📥 恢复</button>
+            </div>
+            <div id="webdavMsg" style="font-size:0.7rem; margin-top:8px;"></div>
+        </div>
+    </div>
+
+    <!-- 历史记录 + 筛选 -->
+    <div class="card">
+        <div class="card-title">📜 历史记录</div>
+        <!-- 筛选栏 -->
+        <div class="filter-bar">
+            <div class="filter-row">
+                <select id="filterType" class="filter-select">
+                    <option value="all">全部类型</option>
+                    <option value="glucose">血糖</option>
+                    <option value="uric">尿酸</option>
+                    <option value="bp">血压</option>
+                    <option value="lipid">血脂</option>
+                </select>
+                <select id="filterStatus" class="filter-select">
+                    <option value="all">全部状态</option>
+                    <option value="normal">合格</option>
+                    <option value="abnormal">超标/异常</option>
+                </select>
+            </div>
+            <div class="filter-row">
+                <input type="date" id="filterDateStart" placeholder="起始日期">
+                <input type="date" id="filterDateEnd" placeholder="结束日期">
+            </div>
+            <div class="filter-row">
+                <select id="filterPeriod" class="filter-select">
+                    <option value="all">所有时段</option>
+                    <option value="空腹">空腹</option>
+                    <option value="早餐后">早餐后</option>
+                    <option value="午餐后">午餐后</option>
+                    <option value="晚餐后">晚餐后</option>
+                    <option value="睡前">睡前</option>
+                </select>
+                <button id="applyFilterBtn" class="filter-btn">🔍 筛选</button>
+                <button id="resetFilterBtn" class="filter-btn">🔄 重置</button>
+            </div>
+        </div>
+
+        <div class="history-table-wrapper">
+            <table class="history-table" id="historyTable">
+                <thead><tr><th>时间</th><th>类型</th><th>数值</th><th>时段/备注</th><th></th></tr></thead>
+                <tbody id="historyBody"><tr><td colspan="5">暂无数据</td></tr></tbody>
+            </table>
+        </div>
+        <div class="footer-actions">
+            <button id="exportExcelBtn" class="file-label">📎 导出 Excel</button>
+            <label for="importExcelInput" class="file-label">📂 导入 Excel</label>
+            <input type="file" id="importExcelInput" accept=".xlsx,.xls" style="display:none">
+            <button id="clearAllBtn" class="file-label">🗑️ 清空所有</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 存储KEY
+    const STORAGE_KEY = "health_advanced_journal_v2";
+    const WEBDAV_KEY = "webdav_config";
+
+    // 全局数据
+    let healthRecords = [];      // 结构化存储
+    let currentType = "glucose";
+    let currentSliders = {};     // 存储各指标的滑动条DOM和取值函数
+
+    // DOM 元素
+    let periodDeviceDiv, noteTextarea;
+    let filteredRecords = [];
+
+    // ---------- 辅助函数 ----------
+    function saveToLocal() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(healthRecords));
+    }
+
+    function loadFromLocal() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+            try {
+                healthRecords = JSON.parse(raw);
+                if (!Array.isArray(healthRecords)) healthRecords = [];
+            } catch(e) { healthRecords = []; }
+        }
+        if (healthRecords.length === 0) {
+            // 示例数据
+            const now = new Date();
+            healthRecords = [{
+                id: Date.now()+1,
+                timestamp: now.toLocaleString(),
+                type: "glucose",
+                value: 5.5, unit: "mmol/L", period: "空腹", device: "医院测量", note: "示例",
+                rawData: { glucose: 5.5 }
+            }];
+            saveToLocal();
+        }
+        applyFiltersAndRender();
+    }
+
+    function genId() { return Date.now() + Math.random() * 10000; }
+
+    // ---------- 滑动条构建模块 (各指标) ----------
+    // 血糖: 范围0.0~30.0 步长0.1
+    function buildGlucoseSliders(container) {
+        container.innerHTML = `
+            <div class="slider-item">
+                <div class="slider-label"><span>🩸 血糖值 (mmol/L)</span><span id="glucoseVal" class="value-number">5.5</span></div>
+                <input type="range" id="glucoseSlider" min="0" max="30" step="0.1" value="5.5">
+            </div>
+            <div class="preview-card" id="glucosePreview">当前血糖: 5.5 mmol/L</div>
+        `;
+        const slider = document.getElementById('glucoseSlider');
+        const valSpan = document.getElementById('glucoseVal');
+        const preview = document.getElementById('glucosePreview');
+        const update = () => {
+            let v = parseFloat(slider.value);
+            valSpan.innerText = v.toFixed(1);
+            preview.innerHTML = `📊 血糖: ${v.toFixed(1)} mmol/L`;
+        };
+        slider.addEventListener('input', update);
+        update();
+        return { getValue: () => parseFloat(slider.value), setValue: (v) => { slider.value = v; update(); } };
+    }
+
+    // 尿酸: 0~1000 μmol/L
+    function buildUricSliders(container) {
+        container.innerHTML = `
+            <div class="slider-item">
+                <div class="slider-label"><span>💧 尿酸 (µmol/L)</span><span id="uricVal" class="value-number">350</span></div>
+                <input type="range" id="uricSlider" min="0" max="1000" step="1" value="350">
+            </div>
+            <div class="preview-card" id="uricPreview">当前尿酸: 350 µmol/L</div>
+        `;
+        const slider = document.getElementById('uricSlider');
+        const valSpan = document.getElementById('uricVal');
+        const preview = document.getElementById('uricPreview');
+        const update = () => {
+            let v = parseInt(slider.value);
+            valSpan.innerText = v;
+            preview.innerHTML = `📊 尿酸: ${v} µmol/L`;
+        };
+        slider.addEventListener('input', update);
+        update();
+        return { getValue: () => parseInt(slider.value), setValue: (v) => { slider.value = v; update(); } };
+    }
+
+    // 血压: 收缩压+舒张压
+    function buildBpSliders(container) {
+        container.innerHTML = `
+            <div class="slider-item">
+                <div class="slider-label"><span>❤️ 收缩压 (mmHg)</span><span id="sysVal" class="value-number">120</span></div>
+                <input type="range" id="sysSlider" min="50" max="250" step="1" value="120">
+            </div>
+            <div class="slider-item">
+                <div class="slider-label"><span>💙 舒张压 (mmHg)</span><span id="diaVal" class="value-number">80</span></div>
+                <input type="range" id="diaSlider" min="30" max="150" step="1" value="80">
+            </div>
+            <div class="preview-card" id="bpPreview">当前血压: 120/80 mmHg</div>
+        `;
+        const sys = document.getElementById('sysSlider');
+        const dia = document.getElementById('diaSlider');
+        const sysSpan = document.getElementById('sysVal');
+        const diaSpan = document.getElementById('diaVal');
+        const preview = document.getElementById('bpPreview');
+        const update = () => {
+            let s = parseInt(sys.value), d = parseInt(dia.value);
+            sysSpan.innerText = s; diaSpan.innerText = d;
+            preview.innerHTML = `📊 血压: ${s}/${d} mmHg`;
+        };
+        sys.addEventListener('input', update);
+        dia.addEventListener('input', update);
+        update();
+        return { getSys: () => parseInt(sys.value), getDia: () => parseInt(dia.value), setValues: (s,d) => { sys.value=s; dia.value=d; update(); } };
+    }
+
+    // 血脂: 甘油三酯, 高密度, 低密度, 总胆固醇 (都使用滑动条)
+    function buildLipidSliders(container) {
+        container.innerHTML = `
+            <div class="slider-item">
+                <div class="slider-label"><span>🫀 甘油三酯 (mmol/L)</span><span id="tgVal" class="value-number">0.5</span></div>
+                <input type="range" id="tgSlider" min="0" max="10" step="0.1" value="0.5">
+            </div>
+            <div class="slider-item">
+                <div class="slider-label"><span>✨ 高密度胆固醇 (mmol/L)</span><span id="hdlVal" class="value-number">1.0</span></div>
+                <input type="range" id="hdlSlider" min="0" max="3" step="0.1" value="1.0">
+            </div>
+            <div class="slider-item">
+                <div class="slider-label"><span>⚠️ 低密度胆固醇 (mmol/L)</span><span id="ldlVal" class="value-number">2.0</span></div>
+                <input type="range" id="ldlSlider" min="0" max="8" step="0.1" value="2.0">
+            </div>
+            <div class="slider-item">
+                <div class="slider-label"><span>📊 总胆固醇 (mmol/L)</span><span id="cholVal" class="value-number">5.0</span></div>
+                <input type="range" id="cholSlider" min="0" max="12" step="0.1" value="5.0">
+            </div>
+            <div class="preview-card" id="lipidPreview">甘油三酯:0.5 高密度:1.0 低密度:2.0 总胆固醇:5.0</div>
+        `;
+        const tg = document.getElementById('tgSlider'), hdl = document.getElementById('hdlSlider'), ldl = document.getElementById('ldlSlider'), chol = document.getElementById('cholSlider');
+        const tgSpan = document.getElementById('tgVal'), hdlSpan = document.getElementById('hdlVal'), ldlSpan = document.getElementById('ldlVal'), cholSpan = document.getElementById('cholVal');
+        const preview = document.getElementById('lipidPreview');
+        const update = () => {
+            let tgv = parseFloat(tg.value).toFixed(1), hdlv = parseFloat(hdl.value).toFixed(1), ldlv = parseFloat(ldl.value).toFixed(1), cholv = parseFloat(chol.value).toFixed(1);
+            tgSpan.innerText = tgv; hdlSpan.innerText = hdlv; ldlSpan.innerText = ldlv; cholSpan.innerText = cholv;
+            preview.innerHTML = `甘油三酯:${tgv} | 高密度:${hdlv} | 低密度:${ldlv} | 总胆固醇:${cholv} mmol/L`;
+        };
+        [tg, hdl, ldl, chol].forEach(s => s.addEventListener('input', update));
+        update();
+        return {
+            getValues: () => ({ tg: parseFloat(tg.value), hdl: parseFloat(hdl.value), ldl: parseFloat(ldl.value), chol: parseFloat(chol.value) }),
+            setDefaults: () => { tg.value=0.5; hdl.value=1.0; ldl.value=2.0; chol.value=5.0; update(); }
+        };
+    }
+
+    function buildPanelByType(type) {
+        const panel = document.getElementById('sliderPanel');
+        panel.innerHTML = '';
+        let ctrl = null;
+        if (type === 'glucose') ctrl = buildGlucoseSliders(panel);
+        else if (type === 'uric') ctrl = buildUricSliders(panel);
+        else if (type === 'bp') ctrl = buildBpSliders(panel);
+        else if (type === 'lipid') ctrl = buildLipidSliders(panel);
+        currentSliders = ctrl;
+        // 显示/隐藏血糖时段设备区域
+        if (periodDeviceDiv) periodDeviceDiv.style.display = (type === 'glucose') ? 'block' : 'none';
+    }
+
+    function resetDefault() {
+        if (!currentSliders) return;
+        if (currentType === 'glucose') currentSliders.setValue(5.5);
+        else if (currentType === 'uric') currentSliders.setValue(350);
+        else if (currentType === 'bp') currentSliders.setValues(120, 80);
+        else if (currentType === 'lipid') currentSliders.setDefaults();
+    }
+
+    function getCurrentRecordData() {
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+        let period = "", device = "";
+        if (currentType === 'glucose') {
+            const periodRadio = document.querySelector('input[name="period"]:checked');
+            const deviceRadio = document.querySelector('input[name="device"]:checked');
+            period = periodRadio ? periodRadio.value : "空腹";
+            device = deviceRadio ? deviceRadio.value : "医院测量";
+        }
+        const note = noteTextarea ? noteTextarea.value : "";
+        let mainValueStr = "", rawData = {};
+        if (currentType === 'glucose') {
+            let val = currentSliders.getValue();
+            mainValueStr = `${val.toFixed(1)} mmol/L`;
+            rawData = { glucose: val };
+        } else if (currentType === 'uric') {
+            let val = currentSliders.getValue();
+            mainValueStr = `${val} μmol/L`;
+            rawData = { uric: val };
+        } else if (currentType === 'bp') {
+            let sys = currentSliders.getSys(), dia = currentSliders.getDia();
+            mainValueStr = `${sys}/${dia} mmHg`;
+            rawData = { systolic: sys, diastolic: dia };
+        } else if (currentType === 'lipid') {
+            let { tg, hdl, ldl, chol } = currentSliders.getValues();
+            mainValueStr = `甘油三酯:${tg.toFixed(1)} 高密度:${hdl.toFixed(1)} 低密度:${ldl.toFixed(1)} 总胆固醇:${chol.toFixed(1)} mmol/L`;
+            rawData = { triglyceride: tg, hdl: hdl, ldl: ldl, totalCholesterol: chol };
+        }
+        return { id: genId(), timestamp, type: currentType, mainValue: mainValueStr, period, device, note, rawData };
+    }
+
+    async function handleRecord() {
+        const record = getCurrentRecordData();
+        healthRecords.unshift(record);
+        saveToLocal();
+        if (noteTextarea) noteTextarea.value = "";
+        applyFiltersAndRender();
+    }
+
+    // ---------- 智能超标判定 ----------
+    function isAbnormal(record) {
+        const type = record.type;
+        const raw = record.rawData;
+        const period = record.period;
+        if (type === 'glucose') {
+            const val = raw.glucose;
+            if (period === "空腹") return (val < 3.9 || val > 6.1);
+            else return (val > 7.8);  // 餐后或睡前 >7.8 超标
+        }
+        if (type === 'uric') {
+            const val = raw.uric;
+            return val > 420;   // 男性标准，简单统一
+        }
+        if (type === 'bp') {
+            const sys = raw.systolic, dia = raw.diastolic;
+            return (sys >= 140 || dia >= 90);
+        }
+        if (type === 'lipid') {
+            const { triglyceride, hdl, ldl, totalCholesterol } = raw;
+            let abnormal = false;
+            if (triglyceride > 1.7) abnormal = true;
+            if (hdl < 1.0) abnormal = true;
+            if (ldl > 3.4) abnormal = true;
+            if (totalCholesterol > 5.2) abnormal = true;
+            return abnormal;
+        }
+        return false;
+    }
+
+    // 筛选主逻辑
+    function filterRecords() {
+        let filtered = [...healthRecords];
+        // 类型筛选
+        const typeFilter = document.getElementById('filterType').value;
+        if (typeFilter !== 'all') filtered = filtered.filter(r => r.type === typeFilter);
+        // 合格/超标筛选
+        const statusFilter = document.getElementById('filterStatus').value;
+        if (statusFilter === 'normal') filtered = filtered.filter(r => !isAbnormal(r));
+        else if (statusFilter === 'abnormal') filtered = filtered.filter(r => isAbnormal(r));
+        // 日期范围
+        const startDate = document.getElementById('filterDateStart').value;
+        const endDate = document.getElementById('filterDateEnd').value;
+        if (startDate) {
+            filtered = filtered.filter(r => r.timestamp.split(' ')[0] >= startDate);
+        }
+        if (endDate) {
+            filtered = filtered.filter(r => r.timestamp.split(' ')[0] <= endDate);
+        }
+        // 时段筛选 (仅对血糖有效，非血糖记录视为满足)
+        const periodFilter = document.getElementById('filterPeriod').value;
+        if (periodFilter !== 'all') {
+            filtered = filtered.filter(r => {
+                if (r.type !== 'glucose') return true;  // 其他指标无时段概念，全部显示
+                return r.period === periodFilter;
+            });
+        }
+        return filtered;
+    }
+
+    function renderHistoryTable(recordsToShow) {
+        const tbody = document.getElementById('historyBody');
+        if (!recordsToShow.length) {
+            tbody.innerHTML = '<tr><td colspan="5">暂无数据</td></tr>';
+            return;
+        }
+        let html = '';
+        recordsToShow.forEach(rec => {
+            const typeLabel = { glucose:'血糖', uric:'尿酸', bp:'血压', lipid:'血脂' }[rec.type];
+            let extra = (rec.type === 'glucose') ? `${rec.period} / ${rec.device}` : (rec.note ? rec.note.slice(0,12) : '');
+            html += `<tr>
+                        <td style="white-space:nowrap;">${rec.timestamp}</td>
+                        <td>${typeLabel}</td>
+                        <td style="max-width:140px;">${rec.mainValue}</td>
+                        <td>${extra}</td>
+                        <td><button class="delete-btn" data-id="${rec.id}">🗑️</button></td>
+                     </tr>`;
+        });
+        tbody.innerHTML = html;
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = Number(btn.getAttribute('data-id'));
+                healthRecords = healthRecords.filter(r => r.id !== id);
+                saveToLocal();
+                applyFiltersAndRender();
+            });
+        });
+    }
+
+    function applyFiltersAndRender() {
+        const filtered = filterRecords();
+        renderHistoryTable(filtered);
+    }
+
+    // ----- Excel 导入导出 (基于结构化数据) -----
+    function exportToExcel() {
+        if (!healthRecords.length) { alert("无数据"); return; }
+        const exportData = healthRecords.map(rec => ({
+            "时间戳": rec.timestamp,
+            "指标类型": { glucose:'血糖', uric:'尿酸', bp:'血压', lipid:'血脂' }[rec.type],
+            "数值详情": rec.mainValue,
+            "记录时段": rec.period || "",
+            "测量设备": rec.device || "",
+            "备注": rec.note || "",
+            "原始数据": JSON.stringify(rec.rawData)
+        }));
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "健康日志");
+        XLSX.writeFile(wb, `health_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xlsx`);
+    }
+
+    function importExcel(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet);
+            if (!rows.length) { alert("空数据"); return; }
+            let added = 0;
+            for (let row of rows) {
+                let timestamp = row["时间戳"] || "";
+                let typeRaw = row["指标类型"] || "";
+                let mainValue = row["数值详情"] || "";
+                let period = row["记录时段"] || "";
+                let device = row["测量设备"] || "";
+                let note = row["备注"] || "";
+                let rawData = {};
+                try { if(row["原始数据"]) rawData = JSON.parse(row["原始数据"]); } catch(e){}
+                if (!timestamp || !typeRaw) continue;
+                let typeKey = '';
+                if (typeRaw.includes('血糖')) typeKey = 'glucose';
+                else if (typeRaw.includes('尿酸')) typeKey = 'uric';
+                else if (typeRaw.includes('血压')) typeKey = 'bp';
+                else if (typeRaw.includes('血脂')) typeKey = 'lipid';
+                else continue;
+                healthRecords.unshift({ id: genId(), timestamp, type: typeKey, mainValue, period, device, note, rawData });
+                added++;
+            }
+            if (added) { saveToLocal(); applyFiltersAndRender(); alert(`导入${added}条`); }
+            else alert("未识别有效列");
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // ---------- WebDAV 简易实现 ----------
+    let webdavConfig = { url:"", user:"", pass:"" };
+    function loadWebdav() {
+        const saved = localStorage.getItem(WEBDAV_KEY);
+        if(saved) try { const c=JSON.parse(saved); webdavConfig=c; document.getElementById('webdavUrl').value=c.url||""; document.getElementById('webdavUser').value=c.user||""; document.getElementById('webdavPass').value=c.pass||""; } catch(e) {}
+    }
+    function saveWebdav() {
+        webdavConfig = { url:document.getElementById('webdavUrl').value, user:document.getElementById('webdavUser').value, pass:document.getElementById('webdavPass').value };
+        localStorage.setItem(WEBDAV_KEY, JSON.stringify(webdavConfig));
+        showMsg("WebDAV设置已保存", "#15803d");
+    }
+    function showMsg(msg, color) { const div=document.getElementById('webdavMsg'); div.innerHTML=msg; div.style.color=color; setTimeout(()=>{if(div.innerHTML===msg) div.innerHTML='';},3000); }
+    async function webdavFetch(method, body=null) {
+        if(!webdavConfig.url) throw new Error("未填写地址");
+        const auth = btoa(`${webdavConfig.user}:${webdavConfig.pass}`);
+        const headers = { "Authorization": `Basic ${auth}` };
+        if(method==="PUT") headers["Content-Type"]="application/json";
+        const res = await fetch(webdavConfig.url, { method, headers, body });
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res;
+    }
+    async function testWebdav() { try { await webdavFetch("HEAD"); showMsg("✅ 连接成功","green"); } catch(e) { showMsg(`❌ 失败: ${e.message}`,"red"); } }
+    async function backupToWebdav() { try { await webdavFetch("PUT", JSON.stringify(healthRecords)); showMsg("✅ 备份成功","green"); } catch(e) { showMsg(`备份失败: ${e.message}`,"red"); } }
+    async function restoreFromWebdav() {
+        try {
+            const res = await webdavFetch("GET");
+            const remote = await res.json();
+            if(!Array.isArray(remote)) throw new Error("格式错误");
+            if(confirm("确定从WebDAV恢复？将合并远程数据(去重)")) {
+                const merged = new Map();
+                [...healthRecords, ...remote].forEach(r=>{ if(r.id) merged.set(r.id, r); else merged.set(genId(), r); });
+                healthRecords = Array.from(merged.values());
+                saveToLocal(); applyFiltersAndRender();
+                showMsg("恢复成功","green");
+            }
+        } catch(e) { showMsg(`恢复失败: ${e.message}`,"red"); }
+    }
+
+    // 切换 WebDAV 卡片
+    function toggleWebdav() {
+        document.getElementById('webdavCard').classList.toggle('visible');
+    }
+
+    // 初始化UI和事件
+    function init() {
+        loadFromLocal();
+        periodDeviceDiv = document.getElementById('periodDeviceArea');
+        noteTextarea = document.getElementById('recordNote');
+        buildPanelByType('glucose');
+        // 类型切换
+        document.querySelectorAll('.type-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const newType = btn.getAttribute('data-type');
+                if(newType === currentType) return;
+                document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('active'));
+                btn.classList.add('active');
+                currentType = newType;
+                buildPanelByType(currentType);
+                resetDefault();
+            });
+        });
+        document.getElementById('recordBtn').addEventListener('click', handleRecord);
+        document.getElementById('resetDefaultBtn').addEventListener('click', resetDefault);
+        document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
+        document.getElementById('clearAllBtn').addEventListener('click', () => { if(confirm("删除所有数据？")){ healthRecords=[]; saveToLocal(); applyFiltersAndRender(); } });
+        document.getElementById('importExcelInput').addEventListener('change', (e) => { if(e.target.files.length) importExcel(e.target.files[0]); e.target.value=''; });
+        document.getElementById('applyFilterBtn').addEventListener('click', applyFiltersAndRender);
+        document.getElementById('resetFilterBtn').addEventListener('click', () => {
+            document.getElementById('filterType').value='all';
+            document.getElementById('filterStatus').value='all';
+            document.getElementById('filterDateStart').value='';
+            document.getElementById('filterDateEnd').value='';
+            document.getElementById('filterPeriod').value='all';
+            applyFiltersAndRender();
+        });
+        document.getElementById('toggleSettingsBtn').addEventListener('click', toggleWebdav);
+        document.getElementById('saveWebdavBtn').addEventListener('click', saveWebdav);
+        document.getElementById('testWebdavBtn').addEventListener('click', testWebdav);
+        document.getElementById('backupToWebdavBtn').addEventListener('click', backupToWebdav);
+        document.getElementById('restoreFromWebdavBtn').addEventListener('click', restoreFromWebdav);
+        loadWebdav();
+        resetDefault();
+    }
+    init();
+</script>
+</body>
+</html>
